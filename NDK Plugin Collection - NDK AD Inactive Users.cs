@@ -46,12 +46,18 @@ namespace NDK.PluginCollection {
 				Boolean optionFailOnGroupNotFound = this.GetConfigValue("FailOnGroupNotFound", true);
 				Boolean optionFailAlways = this.GetConfigValue("FailAlways", true);
 				String optionBaseDN = this.GetConfigValue("BaseDN", String.Empty).Trim();
+				String optionInfoText = this.GetConfigValue("InfoText", "User automatically disabled.").Trim();
 				List <String> optionMemberOfGroupStrings = this.GetConfigValues("MemberOfGroup");
 				List<String> optionNotMemberOfGroupStrings = this.GetConfigValues("NotMemberOfGroup");
 				Int32 optionInactivePeriodDays = this.GetConfigValue("InactivePeriodDays", 90);
 				String optionInactiveAction = this.GetConfigValue("InactiveAction", "DISABLE").ToLower();
 
 				List<String> errors = new List<String>();
+
+				foreach (GroupPrincipal group in this.GetAllGroups()) {
+					this.Log("Group: {0}.", group.Name);
+				}
+
 
 				// Get the member of groups.
 				List<GroupPrincipal> optionMemberOfGroups = new List<GroupPrincipal>();
@@ -62,7 +68,7 @@ namespace NDK.PluginCollection {
 						optionMemberOfGroups.Add(optionMemberOfGroup);
 
 						// Log.
-						this.LogDebug("User must be member of group '{0}'.", optionMemberOfGroup.Name);
+						this.Log("User must be member of group '{0}'.", optionMemberOfGroup.Name);
 					} else {
 						// Log that the group was not found.
 						this.LogError("Unable to find group '{0}'.", optionMemberOfGroupString);
@@ -78,7 +84,7 @@ namespace NDK.PluginCollection {
 						optionNotMemberOfGroups.Add(optionNotMemberOfGroup);
 
 						// Log.
-						this.LogDebug("User may not be member of group '{0}'.", optionNotMemberOfGroup.Name);
+						this.Log("User may not be member of group '{0}'.", optionNotMemberOfGroup.Name);
 					} else {
 						// Log that the group was not found.
 						this.LogError("Unable to find group '{0}'.", optionNotMemberOfGroupString);
@@ -163,6 +169,7 @@ namespace NDK.PluginCollection {
 								// Disable the user.
 								try {
 									//user.Enabled = false;
+									//user.Info = String.Format("{0:yyyy-MM-dd} {0}", DateTime.Now, optionInfoText) + Environment.NewLine + user.Info;
 									//user.Save();
 								} catch (Exception exception) {
 									errors.Add(String.Format("Unable to disabling inactive user: {0} - {1}: ({2})", user.SamAccountName, user.Name, exception.Message));
@@ -176,6 +183,19 @@ namespace NDK.PluginCollection {
 								this.Log("Deleting inactive user: {0} - {1} ({2:yyyy-MM-dd})", user.SamAccountName, user.Name, user.LastLogon);
 
 								// Disable the user.
+								// The user is disabled before it is deleted, incase it can not be deleted.
+								try {
+									//user.Enabled = false;
+									//user.Info = String.Format("{0:yyyy-MM-dd} {0}", DateTime.Now, optionInfoText) + Environment.NewLine + user.Info;
+									//user.Save();
+								} catch (Exception exception) {
+									errors.Add(String.Format("Unable to disabling inactive user: {0} - {1}: ({2})", user.SamAccountName, user.Name, exception.Message));
+
+									// Log.
+									this.LogError(exception);
+								}
+
+								// Delete the user.
 								try {
 									//user.Delete();
 								} catch (Exception exception) {
@@ -232,6 +252,11 @@ namespace NDK.PluginCollection {
 			html.AppendLine(@"			h2 {");
 			html.AppendLine(@"				color: navy;");
 			html.AppendLine(@"			} ");
+			html.AppendLine(@"			th {");
+			html.AppendLine(@"				background-color: #72D2FF;");
+			html.AppendLine(@"				text-align: left;");
+			html.AppendLine(@"				vertical-align: top;");
+			html.AppendLine(@"			}");
 			html.AppendLine(@"			td {");
 			html.AppendLine(@"				text-align: left;");
 			html.AppendLine(@"				vertical-align: top;");
@@ -252,20 +277,20 @@ namespace NDK.PluginCollection {
 
 			// Inactive users.
 			html.AppendLine(@"		<h2>Inactive users</h2>");
-			html.AppendLine(@"		<table border=""0"" cellspacing=""10"">");
+			html.AppendLine(@"		<table border=""0"" cellpadding=""10"" cellspacing=""0"">");
 			html.AppendLine(@"			<thead>");
 			html.AppendLine(@"				<tr>");
-			html.AppendLine(@"					<td>");
+			html.AppendLine(@"					<th>");
 			html.AppendLine($"						Userid<br>");
-			html.AppendLine(@"					</td>");
+			html.AppendLine(@"					</th>");
 
-			html.AppendLine(@"					<td>");
+			html.AppendLine(@"					<th>");
 			html.AppendLine($"						Full name<br>");
-			html.AppendLine(@"					</td>");
+			html.AppendLine(@"					</th>");
 
-			html.AppendLine(@"					<td>");
+			html.AppendLine(@"					<th>");
 			html.AppendLine($"						Last logon<br>");
-			html.AppendLine(@"					</td>");
+			html.AppendLine(@"					</th>");
 			html.AppendLine(@"				</tr>");
 			html.AppendLine(@"			</thead>");
 			html.AppendLine(@"			<tbody>");
@@ -289,12 +314,12 @@ namespace NDK.PluginCollection {
 			html.AppendLine(@"		</table>");
 
 			html.AppendLine(@"		<h2>Configuration</h2>");
-			html.AppendLine(@"		<table border=""0"" cellspacing=""10"">");
+			html.AppendLine(@"		<table border=""0"" cellpadding=""10"" cellspacing=""0"">");
 			html.AppendLine(@"			<tbody>");
 
 			// Period.
 			html.AppendLine(@"				<tr>");
-			html.AppendLine(@"					<td>Inactive period</td>");
+			html.AppendLine(@"					<th>Inactive period</th>");
 			html.AppendLine(@"					<td>");
 			html.AppendLine($"						{optionInactivePeriodDays} days, since {optionInactivePeriod:yyyy-MM-dd}<br>");
 			html.AppendLine(@"					</td>");
@@ -302,7 +327,7 @@ namespace NDK.PluginCollection {
 
 			// Action.
 			html.AppendLine(@"				<tr>");
-			html.AppendLine(@"					<td>Inactive action</td>");
+			html.AppendLine(@"					<th>Inactive action</th>");
 			html.AppendLine(@"					<td>");
 			html.AppendLine($"						{optionInactiveAction.ToUpper()} the inactive users<br>");
 			html.AppendLine(@"					</td>");
@@ -311,7 +336,7 @@ namespace NDK.PluginCollection {
 			// Member of group.
 			if (optionMemberOfGroups.Count > 0) {
 				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<td>Member of group</td>");
+				html.AppendLine(@"					<th>Member of group</th>");
 				html.AppendLine(@"					<td>");
 				foreach (GroupPrincipal group in optionMemberOfGroups) {
 					html.AppendLine($"						{group.Name}<br>");
@@ -323,7 +348,7 @@ namespace NDK.PluginCollection {
 			// Not member of group.
 			if (optionNotMemberOfGroups.Count > 0) {
 				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<td>Not member of group</td>");
+				html.AppendLine(@"					<th>Not member of group</th>");
 				html.AppendLine(@"					<td>");
 				foreach (GroupPrincipal group in optionNotMemberOfGroups) {
 					html.AppendLine($"						{group.Name}<br>");
@@ -335,7 +360,7 @@ namespace NDK.PluginCollection {
 			// Base DN.
 			if (optionBaseDN.Length > 0) {
 				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<td>Below DN</td>");
+				html.AppendLine(@"					<th>Below DN</th>");
 				html.AppendLine(@"					<td>");
 				html.AppendLine($"						{optionBaseDN}<br>");
 				html.AppendLine(@"					</td>");
@@ -348,7 +373,7 @@ namespace NDK.PluginCollection {
 			// Errors.
 			if (errors.Count > 0) {
 				html.AppendLine(@"		<h2>Errors</h2>");
-				html.AppendLine(@"		<table border=""0"" cellspacing=""10"">");
+				html.AppendLine(@"		<table border=""0"" cellpadding=""10"" cellspacing=""0"">");
 				html.AppendLine(@"			<tbody>");
 				foreach (String error in errors) {
 					html.AppendLine(@"				<tr>");
