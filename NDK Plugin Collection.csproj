@@ -105,6 +105,7 @@
   <ItemGroup>
     <Compile Include="NDK Plugin Collection - AssemblyInfo.cs" />
     <Compile Include="NDK Plugin Collection - NDK AD Inactive Users.cs" />
+    <Compile Include="NDK Plugin Collection - NDK AD Synchronize with SOFD.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

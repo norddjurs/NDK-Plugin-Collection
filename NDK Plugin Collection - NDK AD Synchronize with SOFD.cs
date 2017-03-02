@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using NDK.Framework;
 using System.Data;
 using System.DirectoryServices.AccountManagement;
@@ -9,7 +9,7 @@ using System.Linq;
 namespace NDK.PluginCollection {
 
 	#region ActiveDirectoryInactiveUsers class.
-	public class ActiveDirectoryInactiveUsers : PluginBase {
+	public class ActiveDirectorySynchronizeWithSofd : PluginBase {
 
 		#region Implement PluginBase abstraction.
 		/// <summary>
@@ -18,7 +18,7 @@ namespace NDK.PluginCollection {
 		/// </summary>
 		/// <returns></returns>
 		public override Guid GetGuid() {
-			return new Guid("{9EA6C7E2-4822-4F01-A02F-AEC7C4AC84C3}");
+			return new Guid("{A7461D24-EF8C-440D-A004-F25531DB9A57}");
 		} // GetGuid
 
 		/// <summary>
@@ -27,7 +27,7 @@ namespace NDK.PluginCollection {
 		/// </summary>
 		/// <returns></returns>
 		public override String GetName() {
-			return "NDK ActiveDirectory Inactive Users";
+			return "NDK ActiveDirectory Synchronize With SOFD";
 		} // GetName
 
 		/// <summary>
@@ -47,141 +47,44 @@ namespace NDK.PluginCollection {
 				String configMessageSubject = this.GetConfigValue("MessageSubject", this.GetName());
 				Boolean configFailAlways = this.GetConfigValue("FailAlways", true);
 				String configBaseDN = this.GetConfigValue("BaseDN", String.Empty).Trim();
-				String configInfoText = this.GetConfigValue("InfoText", "User automatically disabled.").Trim();
-				Int32 configInactivePeriodDays = this.GetConfigValue("InactivePeriodDays", 90);
-				String configInactiveAction = this.GetConfigValue("InactiveAction", "DISABLE").ToLower();
+				String configInfoText = this.GetConfigValue("InfoText", "User automatically updated.").Trim();
 
-				// Get the inactive date.
-				if (configInactivePeriodDays < 1) {
-					configInactivePeriodDays = 90;
-				}
-				DateTime configInactivePeriod = DateTime.Now.AddDays(-configInactivePeriodDays);
+				// Get the saved option values.
+				DateTime optionLastChanged = this.GetOptionValue("LastChanged", DateTime.MinValue);
+				DateTime optionNewLastChanged = optionLastChanged;
 
-				// Collect the inactive users, that validates according to the configured values.
-				List<Person> inactiveUsers = new List<Person>();
 
-				// Collect errors, when performing the desited action.
-				List<String> errors = new List<String>();
-
-				// Initialize the user validator.
-				ActiveDirectoryUserValidator userValidator = new ActiveDirectoryUserValidator(this);
-
-				// Log.
-				this.Log("Processing inactive users for {0} days, since {1:yyyy-MM-dd}.", configInactivePeriodDays, configInactivePeriod);
-
-				// Get all inactive users.
-				foreach (Person user in this.GetAllUsers(UserQuery.ALL).OrderBy(x => x.LastLogon)) {
-					if ((user.LastLogon != null) && (user.LastLogon.Value.CompareTo(configInactivePeriod) < 0)) {
-						Boolean userIsValidated = false;
-						Boolean userInBaseDN = false;
-
-						// Log.
-						this.Log("Inactive user: {0} - {1} ({2:yyyy-MM-dd})", user.SamAccountName, user.Name, user.LastLogon);
-
-						// Validate the user, according to the configured values.
-						if (userValidator.ValidateUser(user) == true) {
-							// Success.
-							userIsValidated = true;
-						} else {
-							// Fail.
-							userIsValidated = false;
-
-							// Log.
-							this.Log("The user is not applicable, according to the configured values");
-						}
-
-						// Validate that the user is below the base DN.
-						if ((configBaseDN.Length == 0) || ((configBaseDN.Length > 0) && (user.DistinguishedName.EndsWith(configBaseDN) == true))) {
-							// Success.
-							userInBaseDN = true;
-						} else {
-							// Fail.
-							userInBaseDN = false;
-
-							// Log.
-							this.Log("The user is not below the base DN '{0}'. User DN is '{1}'.", configBaseDN, user.DistinguishedName);
-						}
-
-						// Add the user.
-						if ((userIsValidated == true) && (userInBaseDN == true)) {
-							inactiveUsers.Add(user);
-						}
-					}
-				}
-
-				// Process found inactive users.
-				if (configFailAlways == false) {
-					foreach (Person user in inactiveUsers) {
-						switch (configInactiveAction) {
-							case "disable":
-									// Log.
-									this.Log("Disabling inactive user: {0} - {1} ({2:yyyy-MM-dd})", user.SamAccountName, user.Name, user.LastLogon);
-
-								// Disable the user.
-								try {
-									//user.Enabled = false;
-									//user.Info = String.Format("{0:yyyy-MM-dd} {0}", DateTime.Now, configInfoText) + Environment.NewLine + user.Info;
-									//user.Save();
-								} catch (Exception exception) {
-									errors.Add(String.Format("Unable to disabling inactive user: {0} - {1}: ({2})", user.SamAccountName, user.Name, exception.Message));
-
-									// Log.
-									this.LogError(exception);
-								}
-								break;
-							case "delete":
-								// Log.
-								this.Log("Deleting inactive user: {0} - {1} ({2:yyyy-MM-dd})", user.SamAccountName, user.Name, user.LastLogon);
-
-								// Disable the user.
-								// The user is disabled before it is deleted, incase it can not be deleted.
-								try {
-									//user.Enabled = false;
-									//user.Info = String.Format("{0:yyyy-MM-dd} {0}", DateTime.Now, configInfoText) + Environment.NewLine + user.Info;
-									//user.Save();
-								} catch (Exception exception) {
-									errors.Add(String.Format("Unable to disabling inactive user: {0} - {1}: ({2})", user.SamAccountName, user.Name, exception.Message));
-
-									// Log.
-									this.LogError(exception);
-								}
-
-								// Delete the user.
-								try {
-									//user.Delete();
-								} catch (Exception exception) {
-									errors.Add(String.Format("Unable to delete inactive user: {0} - {1}: ({2})", user.SamAccountName, user.Name, exception.Message));
-
-									// Log.
-									this.LogError(exception);
-								}
-								break;
-							default:
-								break;
-						}
-					}
-				} else {
-					// Log.
-					this.Log("None of the inactive users was processed, because the configuration 'FailAlways' is enabled.");
-				}
-
-				// Send message.
-				if (configMessageSend == true) {
-					if (configMessageTo.Count > 0) {
-						this.SendMail(
-							String.Join(";", configMessageTo.ToArray()),
-							configMessageSubject,
-							this.GetHtmlMessage(configFailAlways, configBaseDN, configInactivePeriodDays, configInactiveAction, userValidator, inactiveUsers, errors),
-							true
-						);
+				// Synchronize all users that exist both in the Active Directory and in SOFD.
+				List<SofdEmployee> employees = this.GetAllEmployees(
+					new SofdEmployeeFilter_AdBrugerNavn(SqlWhereFilterOperator.AND, SqlWhereFilterValueOperator.NotEquals, String.Empty),
+					new SofdEmployeeFilter_SidstAendret(SqlWhereFilterOperator.AND, SqlWhereFilterValueOperator.GreaterThan, optionLastChanged),
+					new SofdEmployeeFilter_Aktiv(SqlWhereFilterOperator.AND, SqlWhereFilterValueOperator.Equals, true)
+				);
+				foreach (SofdEmployee employee in employees) {
+					// Get the user.
+					Person user = this.GetUser(employee.AdBrugerNavn);
+					if (user == null) {
+						// The user does not exist in the active directory.
+						this.Log("User not found: {2:yyyy-MM-dd}  '{0} - {1}'.", employee.AdBrugerNavn, employee.Navn, employee.SidstAendret);
 					} else {
-						this.SendMail(
-							configMessageSubject,
-							this.GetHtmlMessage(configFailAlways, configBaseDN, configInactivePeriodDays, configInactiveAction, userValidator, inactiveUsers, errors),
-							true
-						);
+						// The user was found in the active directory.
+						this.Log("Synchronize user: {2:yyyy-MM-dd}  '{0} - {1}'.", employee.AdBrugerNavn, employee.Navn, employee.SidstAendret);
+
+
+
+
+						// Update the new last changed date, so it becomes the highest 'LastChanged' date.
+						if (optionNewLastChanged.CompareTo(employee.SidstAendret) < 0) {
+							optionNewLastChanged = employee.SidstAendret;
+						}
 					}
 				}
+
+
+
+				// Save the option values.
+				this.SetOptionValue("LastChanged", optionNewLastChanged);
+
 			} catch (Exception exception) {
 				// Send message on error.
 				this.SendMail("Error " + this.GetName(), exception.Message, false);
@@ -191,8 +94,7 @@ namespace NDK.PluginCollection {
 			}
 		} // Run
 
-		private String GetHtmlMessage(Boolean configFailAlways, String configBaseDN, Int32 configInactivePeriodDays, String configInactiveAction, ActiveDirectoryUserValidator userValidator, List<Person> inactiveUsers, List<String> errors) {
-			DateTime configInactivePeriod = DateTime.Now.AddDays(-configInactivePeriodDays);
+		private String GetHtmlMessage(Boolean configFailAlways, String configBaseDN, ActiveDirectoryUserValidator userValidator, List<Person> inactiveUsers, List<String> errors) {
 			StringBuilder html = new StringBuilder();
 
 			html.AppendLine(@"<!DOCTYPE html>");
@@ -219,11 +121,11 @@ namespace NDK.PluginCollection {
 
 			// Message.
 			if (configFailAlways == false) {
-				html.AppendLine(@"		<p>This automatic task has performed the specified action on the inactive users in the active directory.");
+				html.AppendLine(@"		<p>This automatic task has performed the specified action on the users in the active directory.");
 				html.AppendLine(@"		</p>");
 			} else {
 				html.AppendLine(@"		<p>This automatic task is DEACTIVATED.<br>");
-				html.AppendLine(@"		<p>When it is enabled, it will perform the specified action on the inactive users in the active directory.");
+				html.AppendLine(@"		<p>When it is enabled, it will perform the specified action on the users in the active directory.");
 				html.AppendLine(@"		</p>");
 			}
 
@@ -285,20 +187,12 @@ namespace NDK.PluginCollection {
 			html.AppendLine(@"			<tbody>");
 
 			// Period.
-			html.AppendLine(@"				<tr>");
-			html.AppendLine(@"					<th>Inactive period</th>");
-			html.AppendLine(@"					<td>");
-			html.AppendLine($"						{configInactivePeriodDays} days, since {configInactivePeriod:yyyy-MM-dd}<br>");
-			html.AppendLine(@"					</td>");
-			html.AppendLine(@"				</tr>");
-
-			// Action.
-			html.AppendLine(@"				<tr>");
-			html.AppendLine(@"					<th>Inactive action</th>");
-			html.AppendLine(@"					<td>");
-			html.AppendLine($"						{configInactiveAction.ToUpper()} the inactive users<br>");
-			html.AppendLine(@"					</td>");
-			html.AppendLine(@"				</tr>");
+			//			html.AppendLine(@"				<tr>");
+			//			html.AppendLine(@"					<th>Inactive period</th>");
+			//			html.AppendLine(@"					<td>");
+			//			html.AppendLine($"						{configInactivePeriodDays} days, since {configInactivePeriod:yyyy-MM-dd}<br>");
+			//			html.AppendLine(@"					</td>");
+			//			html.AppendLine(@"				</tr>");
 
 			// 'white groups one' groups.
 			if (userValidator.WhiteGroupsOne.Length > 0) {
@@ -389,7 +283,7 @@ namespace NDK.PluginCollection {
 		} // GetHtmlMessage
 		#endregion
 
-	} // ActiveDirectoryInactiveUsers
+	} // ActiveDirectorySynchronizeWithSofd
 	#endregion
 
 } // NDK.PluginCollection
