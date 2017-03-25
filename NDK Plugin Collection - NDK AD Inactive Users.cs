@@ -9,7 +9,7 @@ using System.Linq;
 namespace NDK.PluginCollection {
 
 	#region ActiveDirectoryInactiveUsers class.
-	public class ActiveDirectoryInactiveUsers : PluginBase {
+	public class ActiveDirectoryInactiveUsers : BasePlugin {
 
 		#region Implement PluginBase abstraction.
 		/// <summary>
@@ -42,14 +42,14 @@ namespace NDK.PluginCollection {
 		public override void Run() {
 			try {
 				// Get configuration values.
-				Boolean configMessageSend = this.GetConfigValue("MessageSend", true);
-				List<String> configMessageTo = this.GetConfigValues("MessageTo");
-				String configMessageSubject = this.GetConfigValue("MessageSubject", this.GetName());
-				Boolean configFailAlways = this.GetConfigValue("FailAlways", true);
-				String configBaseDN = this.GetConfigValue("BaseDN", String.Empty).Trim();
-				String configInfoText = this.GetConfigValue("InfoText", "User automatically disabled.").Trim();
-				Int32 configInactivePeriodDays = this.GetConfigValue("InactivePeriodDays", 90);
-				String configInactiveAction = this.GetConfigValue("InactiveAction", "DISABLE").ToLower();
+				Boolean configMessageSend = this.GetLocalValue("MessageSend", true);
+				List<String> configMessageTo = this.GetLocalValues("MessageTo");
+				String configMessageSubject = this.GetLocalValue("MessageSubject", this.GetName());
+				Boolean configFailAlways = this.GetLocalValue("FailAlways", true);
+				String configBaseDN = this.GetLocalValue("BaseDN", String.Empty).Trim();
+				String configInfoText = this.GetLocalValue("InfoText", "User automatically disabled.").Trim();
+				Int32 configInactivePeriodDays = this.GetLocalValue("InactivePeriodDays", 90);
+				String configInactiveAction = this.GetLocalValue("InactiveAction", "DISABLE").ToLower();
 
 				// Get the inactive date.
 				if (configInactivePeriodDays < 1) {
@@ -58,7 +58,7 @@ namespace NDK.PluginCollection {
 				DateTime configInactivePeriod = DateTime.Now.AddDays(-configInactivePeriodDays);
 
 				// Collect the inactive users, that validates according to the configured values.
-				List<Person> inactiveUsers = new List<Person>();
+				List<AdUser> inactiveUsers = new List<AdUser>();
 
 				// Collect errors, when performing the desited action.
 				List<String> errors = new List<String>();
@@ -70,7 +70,7 @@ namespace NDK.PluginCollection {
 				this.Log("Processing inactive users for {0} days, since {1:yyyy-MM-dd}.", configInactivePeriodDays, configInactivePeriod);
 
 				// Get all inactive users.
-				foreach (Person user in this.GetAllUsers(UserQuery.ALL).OrderBy(x => x.LastLogon)) {
+				foreach (AdUser user in this.GetAllUsers(UserQuery.ALL).OrderBy(x => x.LastLogon)) {
 					if ((user.LastLogon != null) && (user.LastLogon.Value.CompareTo(configInactivePeriod) < 0)) {
 						Boolean userIsValidated = false;
 						Boolean userInBaseDN = false;
@@ -111,7 +111,7 @@ namespace NDK.PluginCollection {
 
 				// Process found inactive users.
 				if (configFailAlways == false) {
-					foreach (Person user in inactiveUsers) {
+					foreach (AdUser user in inactiveUsers) {
 						switch (configInactiveAction) {
 							case "disable":
 									// Log.
@@ -191,7 +191,7 @@ namespace NDK.PluginCollection {
 			}
 		} // Run
 
-		private String GetHtmlMessage(Boolean configFailAlways, String configBaseDN, Int32 configInactivePeriodDays, String configInactiveAction, ActiveDirectoryUserValidator userValidator, List<Person> inactiveUsers, List<String> errors) {
+		private String GetHtmlMessage(Boolean configFailAlways, String configBaseDN, Int32 configInactivePeriodDays, String configInactiveAction, ActiveDirectoryUserValidator userValidator, List<AdUser> inactiveUsers, List<String> errors) {
 			DateTime configInactivePeriod = DateTime.Now.AddDays(-configInactivePeriodDays);
 			StringBuilder html = new StringBuilder();
 
@@ -251,7 +251,7 @@ namespace NDK.PluginCollection {
 			html.AppendLine(@"			</thead>");
 			html.AppendLine(@"			<tbody>");
 
-			foreach (Person user in inactiveUsers) {
+			foreach (AdUser user in inactiveUsers) {
 				html.AppendLine(@"				<tr>");
 				html.AppendLine(@"					<td>");
 				html.AppendLine($"						{user.SamAccountName}<br>");

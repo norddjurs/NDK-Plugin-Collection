@@ -9,7 +9,7 @@ using System.Linq;
 namespace NDK.PluginCollection {
 
 	#region ActiveDirectoryInactiveUsers class.
-	public class ActiveDirectorySynchronizeWithSofd : PluginBase {
+	public class ActiveDirectorySynchronizeWithSofd : BasePlugin {
 
 		#region Implement PluginBase abstraction.
 		/// <summary>
@@ -42,12 +42,12 @@ namespace NDK.PluginCollection {
 		public override void Run() {
 			try {
 				// Get configuration values.
-				Boolean configMessageSend = this.GetConfigValue("MessageSend", true);
-				List<String> configMessageTo = this.GetConfigValues("MessageTo");
-				String configMessageSubject = this.GetConfigValue("MessageSubject", this.GetName());
-				Boolean configFailAlways = this.GetConfigValue("FailAlways", true);
-				String configBaseDN = this.GetConfigValue("BaseDN", String.Empty).Trim();
-				String configInfoText = this.GetConfigValue("InfoText", "User automatically updated.").Trim();
+				Boolean configMessageSend = this.GetLocalValue("MessageSend", true);
+				List<String> configMessageTo = this.GetLocalValues("MessageTo");
+				String configMessageSubject = this.GetLocalValue("MessageSubject", this.GetName());
+				Boolean configFailAlways = this.GetLocalValue("FailAlways", true);
+				String configBaseDN = this.GetLocalValue("BaseDN", String.Empty).Trim();
+				String configInfoText = this.GetLocalValue("InfoText", "User automatically updated.").Trim();
 
 				// Get the saved option values.
 				DateTime optionLastChanged = this.GetOptionValue("LastChanged", DateTime.MinValue);
@@ -62,7 +62,7 @@ namespace NDK.PluginCollection {
 				);
 				foreach (SofdEmployee employee in employees) {
 					// Get the user.
-					Person user = this.GetUser(employee.AdBrugerNavn);
+					AdUser user = this.GetUser(employee.AdBrugerNavn);
 					if (user == null) {
 						// The user does not exist in the active directory.
 						this.Log("User not found: {2:yyyy-MM-dd}  '{0} - {1}'.", employee.AdBrugerNavn, employee.Navn, employee.SidstAendret);
@@ -94,7 +94,7 @@ namespace NDK.PluginCollection {
 			}
 		} // Run
 
-		private String GetHtmlMessage(Boolean configFailAlways, String configBaseDN, ActiveDirectoryUserValidator userValidator, List<Person> inactiveUsers, List<String> errors) {
+		private String GetHtmlMessage(Boolean configFailAlways, String configBaseDN, ActiveDirectoryUserValidator userValidator, List<AdUser> inactiveUsers, List<String> errors) {
 			StringBuilder html = new StringBuilder();
 
 			html.AppendLine(@"<!DOCTYPE html>");
@@ -153,7 +153,7 @@ namespace NDK.PluginCollection {
 			html.AppendLine(@"			</thead>");
 			html.AppendLine(@"			<tbody>");
 
-			foreach (Person user in inactiveUsers) {
+			foreach (AdUser user in inactiveUsers) {
 				html.AppendLine(@"				<tr>");
 				html.AppendLine(@"					<td>");
 				html.AppendLine($"						{user.SamAccountName}<br>");

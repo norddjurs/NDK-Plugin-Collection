@@ -68,6 +68,7 @@
     <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Web" />
     <Reference Include="System.Data" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
@@ -106,6 +107,7 @@
     <Compile Include="NDK Plugin Collection - AssemblyInfo.cs" />
     <Compile Include="NDK Plugin Collection - NDK AD Inactive Users.cs" />
     <Compile Include="NDK Plugin Collection - NDK AD Synchronize with SOFD.cs" />
+    <Compile Include="NDK Plugin Collection - NDK Send Windows Message.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
