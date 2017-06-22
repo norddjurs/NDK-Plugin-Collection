@@ -1,10 +1,6 @@
 ﻿using System;
 using NDK.Framework;
-using System.Data;
-using System.DirectoryServices.AccountManagement;
 using System.Collections.Generic;
-using System.Text;
-using System.Linq;
 
 namespace NDK.PluginCollection {
 
@@ -41,50 +37,350 @@ namespace NDK.PluginCollection {
 		/// </summary>
 		public override void Run() {
 			try {
-				// Get configuration values.
+				// Get config.
 				Boolean configMessageSend = this.GetLocalValue("MessageSend", true);
 				List<String> configMessageTo = this.GetLocalValues("MessageTo");
 				String configMessageSubject = this.GetLocalValue("MessageSubject", this.GetName());
-				Boolean configFailAlways = this.GetLocalValue("FailAlways", true);
-				String configBaseDN = this.GetLocalValue("BaseDN", String.Empty).Trim();
-				String configInfoText = this.GetLocalValue("InfoText", "User automatically updated.").Trim();
 
-				// Get the saved option values.
-				DateTime optionLastChanged = this.GetOptionValue("LastChanged", DateTime.MinValue);
-				DateTime optionNewLastChanged = optionLastChanged;
+				String configInfoText = this.GetLocalValue("InfoText", "User automatically updated.");
+
+				String configSyncCprNumber = this.GetLocalValue("SyncCprNumber", String.Empty);
+				String configSyncMiFareId = this.GetLocalValue("SyncMiFareId", String.Empty);
+				String configSyncFirstName = this.GetLocalValue("SyncFirstName", String.Empty);
+				String configSyncLastName = this.GetLocalValue("SyncLastName", String.Empty);
+				String configSyncFullName = this.GetLocalValue("SyncFullName", String.Empty);
+				String configSyncDisplayName = this.GetLocalValue("SyncDisplayName", String.Empty);
+				String configSyncPhone = this.GetLocalValue("SyncPhone", String.Empty);
+				String configSyncMobile1 = this.GetLocalValue("SyncMobile1", String.Empty);
+				String configSyncMobile2 = this.GetLocalValue("SyncMobile2", String.Empty);
+				String configSyncMail = this.GetLocalValue("SyncMail", String.Empty);
+				String configSyncTitle = this.GetLocalValue("SyncTitle", String.Empty);
+				String configSyncDepartment = this.GetLocalValue("SyncDepartment", String.Empty);
+				String configSyncManager = this.GetLocalValue("SyncManager", String.Empty);
+				String configSyncAddress = this.GetLocalValue("SyncAddress", String.Empty);
 
 
-				// Synchronize all users that exist both in the Active Directory and in SOFD.
+				//-----------------------------------------------------------------------------------------------------------------------------------
+				// Synchronize users existing both in Active Directory and SOFD Directory.
+				//-----------------------------------------------------------------------------------------------------------------------------------
+				// Report.
+				HtmlBuilder html = new HtmlBuilder();
+				List<List<String>> tableUpdated = new List<List<String>>();
+				tableUpdated.Add(new List<String>() { "", "ID", "Full name", "Fields" });
+				Int32 tableUpdatedAdCount = 0;
+				Int32 tableUpdatedEmployeeCount = 0;
+
+				// Only synchronize users according to membership of the SyncWhiteGroupsOne, SyncWhiteGroupsAll, SyncBlackGroupsOne, SyncBlackGroupsAll groups.
+				ActiveDirectoryUserValidator adUserValidator = new ActiveDirectoryUserValidator(this, "Sync");
+
+				// Only synchronize users one time.
+				List<String> adUserSynchronized = new List<String>();
+
+				// Get all active employees from SOFD Directory.
 				List<SofdEmployee> employees = this.GetAllEmployees(
-					new SofdEmployeeFilter_AdBrugerNavn(SqlWhereFilterOperator.AND, SqlWhereFilterValueOperator.NotEquals, String.Empty),
-					new SofdEmployeeFilter_SidstAendret(SqlWhereFilterOperator.AND, SqlWhereFilterValueOperator.GreaterThan, optionLastChanged),
 					new SofdEmployeeFilter_Aktiv(SqlWhereFilterOperator.AND, SqlWhereFilterValueOperator.Equals, true)
 				);
+
 				foreach (SofdEmployee employee in employees) {
-					// Get the user.
-					AdUser user = this.GetUser(employee.AdBrugerNavn);
-					if (user == null) {
-						// The user does not exist in the active directory.
-						this.Log("User not found: {2:yyyy-MM-dd}  '{0} - {1}'.", employee.AdBrugerNavn, employee.Navn, employee.SidstAendret);
-					} else {
-						// The user was found in the active directory.
-						this.Log("Synchronize user: {2:yyyy-MM-dd}  '{0} - {1}'.", employee.AdBrugerNavn, employee.Navn, employee.SidstAendret);
+					// Get the associated user in Active Directory.
+					AdUser adUser = this.GetUser(employee.AdBrugerNavn);
+					if ((adUser != null) && (adUserValidator.ValidateUser(adUser) == true) && (adUserSynchronized.Contains(adUser.SamAccountName) == false)) {
+						List<String> adUpdated = new List<String>();
+						List<String> adUpdatedLong = new List<String>();
+						List<String> employeeUpdated = new List<String>();
+						List<String> employeeUpdatedLong = new List<String>();
 
+						// Only synchronize users one time.
+						adUserSynchronized.Add(adUser.SamAccountName);
 
+						// Update.
+						if (this.GetUserCprNumber(adUser).GetNotNull().Trim().Replace("-", String.Empty).Equals(employee.CprNummer.GetNotNull().Trim().Replace("-", String.Empty)) == false) {
+							if (configSyncCprNumber.ToLower().Equals("ad") == true) {
+								adUpdated.Add("CPR number");
+								adUpdatedLong.Add(String.Format("CPR number ({0} -> {1})", employee.CprNummer.FormatStringCpr(), this.GetUserCprNumber(adUser)));
+								this.SetUserCprNumber(adUser, employee.CprNummer);
+							}
+							if (configSyncCprNumber.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("CPR number");
+								employeeUpdatedLong.Add(String.Format("CPR number ({0} -> {1})", this.GetUserCprNumber(adUser), employee.CprNummer.FormatStringCpr()));
+								employee.CprNummer = this.GetUserCprNumber(adUser);
+							}
+						}
 
+						if (this.GetUserMiFareId(adUser).GetNotNull().Trim().Equals(employee.MiFareId.GetNotNull().Trim()) == false) {
+							if (configSyncMiFareId.ToLower().Equals("ad") == true) {
+								adUpdated.Add("MiFare identifier");
+								adUpdatedLong.Add(String.Format("MiFare identifier ({0} -> {1})", employee.MiFareId, this.GetUserMiFareId(adUser)));
+								this.SetUserMiFareId(adUser, employee.MiFareId);
+							}
+							if (configSyncMiFareId.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("MiFare identifier");
+								employeeUpdatedLong.Add(String.Format("MiFare identifier ({0} -> {1})", this.GetUserMiFareId(adUser), employee.MiFareId));
+								employee.MiFareId = this.GetUserMiFareId(adUser);
+							}
+						}
 
-						// Update the new last changed date, so it becomes the highest 'LastChanged' date.
-						if (optionNewLastChanged.CompareTo(employee.SidstAendret) < 0) {
-							optionNewLastChanged = employee.SidstAendret;
+						if (adUser.GivenName.GetNotNull().Trim().Equals(employee.ForNavn.GetNotNull().Trim()) == false) {
+							if (configSyncFirstName.ToLower().Equals("ad") == true) {
+								adUpdated.Add("First name");
+								adUpdatedLong.Add(String.Format("First name ({0} -> {1})", employee.ForNavn, adUser.GivenName));
+								adUser.GivenName = employee.ForNavn;
+							}
+							if (configSyncFirstName.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("First name");
+								employeeUpdatedLong.Add(String.Format("First name ({0} -> {1})", adUser.GivenName, employee.ForNavn));
+								employee.ForNavn = adUser.GivenName;
+							}
+						}
+
+						if (adUser.Surname.GetNotNull().Trim().Equals(employee.EfterNavn.GetNotNull().Trim()) == false) {
+							if (configSyncLastName.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Last name");
+								adUpdatedLong.Add(String.Format("Last name ({0} -> {1})", employee.EfterNavn, adUser.Surname));
+								adUser.Surname = employee.EfterNavn;
+							}
+							if (configSyncLastName.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Last name");
+								employeeUpdatedLong.Add(String.Format("Last name ({0} -> {1})", adUser.Surname, employee.EfterNavn));
+								employee.EfterNavn = adUser.Surname;
+							}
+						}
+
+						if (adUser.Name.GetNotNull().Trim().Equals(employee.Navn.GetNotNull().Trim()) == false) {
+							if (configSyncFullName.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Full name");
+								adUpdatedLong.Add(String.Format("Full name ({0} -> {1})", employee.Navn, adUser.Name));
+								adUser.Name = employee.Navn;
+							}
+							if (configSyncFullName.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Full name");
+								employeeUpdatedLong.Add(String.Format("Full name ({0} -> {1})", adUser.Name, employee.Navn));
+								employee.Navn = adUser.Name;
+							}
+						}
+
+						if (adUser.DisplayName.GetNotNull().Trim().Equals(employee.KaldeNavn.GetNotNull().Trim()) == false) {
+							if (configSyncDisplayName.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Display name");
+								adUpdatedLong.Add(String.Format("Display name ({0} -> {1})", employee.KaldeNavn, adUser.DisplayName));
+								adUser.DisplayName = employee.KaldeNavn;
+							}
+							if (configSyncDisplayName.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Display name");
+								employeeUpdatedLong.Add(String.Format("Display name ({0} -> {1})", adUser.DisplayName, employee.KaldeNavn));
+								employee.KaldeNavn = adUser.DisplayName;
+							}
+						}
+
+						if (adUser.TelephoneNumber.GetNotNull().Trim().Replace(" ", String.Empty).Equals(employee.TelefonNummer.GetNotNull().Trim().Replace(" ", String.Empty)) == false) {
+							if (configSyncPhone.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Phone");
+								adUpdatedLong.Add(String.Format("Phone ({0} -> {1})", employee.TelefonNummer.FormatStringPhone(), adUser.TelephoneNumber.FormatStringPhone()));
+								adUser.TelephoneNumber = employee.TelefonNummer.FormatStringPhone();
+							}
+							if (configSyncPhone.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Phone");
+								employeeUpdatedLong.Add(String.Format("Phone ({0} -> {1})", adUser.TelephoneNumber.FormatStringPhone(), employee.TelefonNummer.FormatStringPhone()));
+								employee.TelefonNummer = adUser.TelephoneNumber.FormatStringPhone();
+							}
+						}
+
+						if (adUser.Mobile.GetNotNull().Trim().Replace(" ", String.Empty).Equals(employee.MobilNummer.GetNotNull().Trim().Replace(" ", String.Empty)) == false) {
+							if (configSyncMobile1.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Mobile 1");
+								adUpdatedLong.Add(String.Format("Mobile 1 ({0} -> {1})", employee.MobilNummer.FormatStringPhone(), adUser.Mobile.FormatStringPhone()));
+								adUser.Mobile = employee.MobilNummer.FormatStringPhone();
+							}
+							if (configSyncMobile1.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Mobile 1");
+								employeeUpdatedLong.Add(String.Format("Mobile 1 ({0} -> {1})", adUser.Mobile.FormatStringPhone(), employee.MobilNummer.FormatStringPhone()));
+								employee.MobilNummer = adUser.Mobile.FormatStringPhone();
+							}
+						}
+
+						if (this.GetUserOtherMobile(adUser).Trim().Replace(" ", String.Empty).Equals(employee.MobilNummer2.GetNotNull().Trim().Replace(" ", String.Empty)) == false) {
+							if (configSyncMobile2.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Mobile 2");
+								adUpdatedLong.Add(String.Format("Mobile 2 ({0} -> {1})", employee.MobilNummer2.FormatStringPhone(), this.GetUserOtherMobile(adUser)));
+								this.SetUserOtherMobile(adUser, employee.MobilNummer2.FormatStringPhone());
+							}
+							if (configSyncMobile2.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Mobile 2");
+								employeeUpdatedLong.Add(String.Format("Mobile 2 ({0} -> {1})", this.GetUserOtherMobile(adUser), employee.MobilNummer2.FormatStringPhone()));
+								employee.MobilNummer2 = this.GetUserOtherMobile(adUser);
+							}
+						}
+
+						if (adUser.SmtpProxyAddress.GetNotNull().Trim().Replace(" ", String.Empty).Equals(employee.Epost.GetNotNull().Trim()) == false) {
+							if (configSyncMail.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Mail");
+								adUpdatedLong.Add(String.Format("Mail ({0} -> {1})", employee.Epost.GetNotNull(), adUser.SmtpProxyAddress));
+								adUser.SmtpProxyAddress = employee.Epost;
+							}
+							if (configSyncMail.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Mail");
+								employeeUpdatedLong.Add(String.Format("Mail ({0} -> {1})", adUser.SmtpProxyAddress, employee.Epost.GetNotNull()));
+								employee.Epost = adUser.SmtpProxyAddress;
+							}
+						}
+
+						if (adUser.Title.GetNotNull().Trim().Equals(employee.StillingsBetegnelse.GetNotNull().Trim()) == false) {
+							if (configSyncTitle.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Title");
+								adUpdatedLong.Add(String.Format("Title ({0} -> {1})", employee.StillingsBetegnelse, adUser.Title));
+								adUser.Title = employee.StillingsBetegnelse;
+							}
+							if (configSyncTitle.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Title");
+								employeeUpdatedLong.Add(String.Format("Title ({0} -> {1})", adUser.Title, employee.StillingsBetegnelse));
+								employee.StillingsBetegnelse = adUser.Title;
+							}
+						}
+
+						if (adUser.Department.GetNotNull().Trim().Equals(employee.OrganisationNavn.GetNotNull().Trim()) == false) {
+							if (configSyncDepartment.ToLower().Equals("ad") == true) {
+								adUpdated.Add("Department");
+								adUpdatedLong.Add(String.Format("Department ({0} -> {1})", employee.OrganisationNavn, adUser.Department));
+								adUser.Department = employee.OrganisationNavn;
+							}
+							if (configSyncDepartment.ToLower().Equals("sofd") == true) {
+								employeeUpdated.Add("Department");
+								employeeUpdatedLong.Add(String.Format("Department ({0} -> {1})", adUser.Department, employee.OrganisationNavn));
+								employee.OrganisationNavn = adUser.Department;
+							}
+						}
+
+						if ((configSyncManager.ToLower().Equals("ad") == true) || (configSyncManager.ToLower().Equals("sofd") == true)) {
+							String adUserManagerDn = adUser.Manager.GetNotNull();
+							String employeeManagerDn = String.Empty;
+							try {
+								employeeManagerDn = this.GetUser(employee.GetNearestLeader().AdBrugerNavn).DistinguishedName.GetNotNull();
+							} catch {}
+
+							if (adUserManagerDn.Equals(employeeManagerDn) == false) {
+								if (configSyncManager.ToLower().Equals("ad") == true) {
+									adUpdated.Add("Manager");
+									adUpdatedLong.Add(String.Format("Manager ({0} -> {1})", employeeManagerDn, adUserManagerDn));
+									adUser.Manager = employeeManagerDn;
+								}
+								if (configSyncManager.ToLower().Equals("sofd") == true) {
+									AdUser adUserManager = this.GetUser(adUserManagerDn);
+									if (adUserManager != null) {
+										SofdEmployee employeeManager = this.GetEmployee(adUserManager.SamAccountName);
+
+										employeeUpdated.Add("Manager");
+										employeeUpdatedLong.Add(String.Format("Manager ({0} -> {1})", adUserManagerDn, employeeManagerDn));
+										employee.NaermesteLederAdBrugerNavn = employeeManager.AdBrugerNavn;
+										employee.NaermesteLederCprNummer = employeeManager.CprNummer;
+										employee.NaermesteLederMaNummer = employeeManager.MaNummer;
+										employee.NaermesteLederNavn = employeeManager.Navn;
+									}
+								}
+							}
+						}
+
+						if (configSyncAddress.ToLower().Equals("work") == true) {
+							SofdOrganization organization = employee.GetOrganisation();
+							if (organization != null) {
+								String orgaizationAddress = (organization.Gade.GetNotNull() + Environment.NewLine + organization.StedNavn.GetNotNull()).Trim().Trim('\r', '\n').Trim();
+								if (adUser.Street.GetNotNull().Trim().Equals(orgaizationAddress) == false) {
+									adUpdated.Add("Street");
+									adUpdatedLong.Add(String.Format("Street ({0} -> {1})", orgaizationAddress, adUser.Street));
+									adUser.Street = orgaizationAddress;
+								}
+								if (adUser.City.GetNotNull().Trim().Equals(organization.By.GetNotNull().Trim()) == false) {
+									adUpdated.Add("City");
+									adUpdatedLong.Add(String.Format("City ({0} -> {1})", organization.By, adUser.City));
+									adUser.City = organization.By;
+								}
+								if (adUser.PostalCode.GetNotNull().Trim().Equals(organization.PostNummer.ToString()) == false) {
+									adUpdated.Add("Postal number");
+									adUpdatedLong.Add(String.Format("Postal number ({0} -> {1})", organization.PostNummer, adUser.PostalCode));
+									adUser.PostalCode = organization.PostNummer.ToString();
+								}
+								if (adUser.Country.GetNotNull().Trim().Equals("DK") == false) {	// Does not exist in SofdOrganization!
+									adUpdated.Add("Country");
+									adUpdatedLong.Add(String.Format("Country ({0} -> {1})", "DK", adUser.Country));
+									adUser.Country = "DK";
+								}
+							}
+						}
+						if (configSyncAddress.ToLower().Equals("home") == true) {
+							String employeeAddress = (employee.Adresse.GetNotNull() + Environment.NewLine + employee.StedNavn.GetNotNull()).Trim().Trim('\r', '\n').Trim();
+							if (adUser.Street.GetNotNull().Trim().Equals(employeeAddress) == false) {
+								adUpdated.Add("Street");
+								adUpdatedLong.Add(String.Format("Street ({0} -> {1})", employeeAddress, adUser.Street));
+								adUser.Street = employeeAddress;
+							}
+							if (adUser.City.GetNotNull().Trim().Equals(employee.By.GetNotNull().Trim()) == false) {
+								adUpdated.Add("City");
+								adUpdatedLong.Add(String.Format("City ({0} -> {1})", employee.By, adUser.City));
+								adUser.City = employee.By;
+							}
+							if (adUser.PostalCode.GetNotNull().Trim().Equals(employee.PostNummer.GetNotNull().Trim()) == false) {
+								adUpdated.Add("Postal number");
+								adUpdatedLong.Add(String.Format("Postal number ({0} -> {1})", employee.PostNummer, adUser.PostalCode));
+								adUser.PostalCode = employee.PostNummer;
+							}
+							if (adUser.Country.GetNotNull().Trim().Equals(employee.Land.GetNotNull().Trim()) == false) {
+								adUpdated.Add("Country");
+								adUpdatedLong.Add(String.Format("Country ({0} -> {1})", employee.Land, adUser.Country));
+								adUser.Country = employee.Land;
+							}
+						}
+
+						// Save.
+						if (adUpdated.Count > 0) {
+							// Save.
+							if (configInfoText.IsNullOrWhiteSpace() == false) {
+								adUser.InsertInfo(configInfoText + ": " + String.Join(", ", adUpdated));
+							}
+							adUser.Save();
+
+							// Log.
+							this.LogDebug("Updated user in AD: {0} - {1}. Fields: {2}", adUser.SamAccountName, adUser.Name, String.Join(", ", adUpdated));
+
+							// Report.
+							tableUpdated.Add(new List<String>() { "AD", adUser.SamAccountName, adUser.Name, String.Join(Environment.NewLine, adUpdatedLong) });
+							tableUpdatedAdCount++;
+						}
+						if (employeeUpdated.Count > 0) {
+							// Save.
+							employee.Save(true);
+
+							// Log.
+							this.LogDebug("Updated user in SOFD: {0} - {1}. Fields: {2}", employee.MedarbejderHistorikId, employee.Navn, String.Join(", ", employeeUpdated));
+
+							// Report.
+							tableUpdated.Add(new List<String>() { "SOFD", employee.AdBrugerNavn, employee.Navn, String.Join(Environment.NewLine, employeeUpdatedLong) });
+							tableUpdatedEmployeeCount++;
 						}
 					}
 				}
 
+				// Report.
+				html.AppendHeading2("Updated users/employees");
+				tableUpdated.Add(new List<String>() { tableUpdatedAdCount + " AD users, " + tableUpdatedEmployeeCount + " SOFD users" });
+				html.AppendHorizontalTable(tableUpdated, 1, 0);
 
 
-				// Save the option values.
-				this.SetOptionValue("LastChanged", optionNewLastChanged);
-
+				// Send message.
+				if (configMessageSend == true) {
+					if (configMessageTo.Count > 0) {
+						this.SendMail(
+							String.Join(";", configMessageTo.ToArray()),
+							configMessageSubject,
+							html.ToString(),
+							true
+						);
+					} else {
+						this.SendMail(
+							configMessageSubject,
+							html.ToString(),
+							true
+						);
+					}
+				}
 			} catch (Exception exception) {
 				// Send message on error.
 				this.SendMail("Error " + this.GetName(), exception.Message, false);
@@ -93,194 +389,6 @@ namespace NDK.PluginCollection {
 				throw;
 			}
 		} // Run
-
-		private String GetHtmlMessage(Boolean configFailAlways, String configBaseDN, ActiveDirectoryUserValidator userValidator, List<AdUser> inactiveUsers, List<String> errors) {
-			StringBuilder html = new StringBuilder();
-
-			html.AppendLine(@"<!DOCTYPE html>");
-			html.AppendLine(@"<html>");
-			html.AppendLine(@"	<head>");
-			html.AppendLine(@"		<meta  content=""text /html; charset=UTF-8""  http-equiv=""content-type"">");
-			html.AppendLine(@"		<title>Advis</title>");
-			html.AppendLine(@"		<style>");
-			html.AppendLine(@"			h2 {");
-			html.AppendLine(@"				color: navy;");
-			html.AppendLine(@"			} ");
-			html.AppendLine(@"			th {");
-			html.AppendLine(@"				background-color: #72D2FF;");
-			html.AppendLine(@"				text-align: left;");
-			html.AppendLine(@"				vertical-align: top;");
-			html.AppendLine(@"			}");
-			html.AppendLine(@"			td {");
-			html.AppendLine(@"				text-align: left;");
-			html.AppendLine(@"				vertical-align: top;");
-			html.AppendLine(@"			}");
-			html.AppendLine(@"		</style>");
-			html.AppendLine(@"	</head>");
-			html.AppendLine(@"	<body>");
-
-			// Message.
-			if (configFailAlways == false) {
-				html.AppendLine(@"		<p>This automatic task has performed the specified action on the users in the active directory.");
-				html.AppendLine(@"		</p>");
-			} else {
-				html.AppendLine(@"		<p>This automatic task is DEACTIVATED.<br>");
-				html.AppendLine(@"		<p>When it is enabled, it will perform the specified action on the users in the active directory.");
-				html.AppendLine(@"		</p>");
-			}
-
-			// Inactive users.
-			html.AppendLine(@"		<h2>Inactive users</h2>");
-			html.AppendLine(@"		<table border=""0"" cellpadding=""5"" cellspacing=""0"">");
-			html.AppendLine(@"			<thead>");
-			html.AppendLine(@"				<tr>");
-			html.AppendLine(@"					<th>");
-			html.AppendLine($"						Userid<br>");
-			html.AppendLine(@"					</th>");
-
-			html.AppendLine(@"					<th>");
-			html.AppendLine($"						Full name<br>");
-			html.AppendLine(@"					</th>");
-
-			html.AppendLine(@"					<th>");
-			html.AppendLine($"						E-mail<br>");
-			html.AppendLine(@"					</th>");
-
-			html.AppendLine(@"					<th>");
-			html.AppendLine($"						Last logon<br>");
-			html.AppendLine(@"					</th>");
-			html.AppendLine(@"				</tr>");
-			html.AppendLine(@"			</thead>");
-			html.AppendLine(@"			<tbody>");
-
-			foreach (AdUser user in inactiveUsers) {
-				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<td>");
-				html.AppendLine($"						{user.SamAccountName}<br>");
-				html.AppendLine(@"					</td>");
-
-				html.AppendLine(@"					<td>");
-				html.AppendLine($"						{user.Name}<br>");
-				html.AppendLine(@"					</td>");
-
-				html.AppendLine(@"					<td>");
-				html.AppendLine($"						{user.EmailAddress}<br>");
-				html.AppendLine(@"					</td>");
-
-				html.AppendLine(@"					<td>");
-				html.AppendLine($"						{user.LastLogon.Value:yyyy-MM-dd}<br>");
-				html.AppendLine(@"					</td>");
-				html.AppendLine(@"				</tr>");
-			}
-			html.AppendLine(@"			</tbody>");
-			html.AppendLine(@"			<tfoot>");
-			html.AppendLine(@"				<tr>");
-			html.AppendLine(@"					<td colspan=""4"">");
-			html.AppendLine($"						{inactiveUsers.Count} inactive users");
-			html.AppendLine(@"					</td>");
-			html.AppendLine(@"				</tr>");
-			html.AppendLine(@"			</tfoot>");
-			html.AppendLine(@"		</table>");
-
-			html.AppendLine(@"		<h2>Configuration</h2>");
-			html.AppendLine(@"		<table border=""0"" cellpadding=""5"" cellspacing=""0"">");
-			html.AppendLine(@"			<tbody>");
-
-			// Period.
-			//			html.AppendLine(@"				<tr>");
-			//			html.AppendLine(@"					<th>Inactive period</th>");
-			//			html.AppendLine(@"					<td>");
-			//			html.AppendLine($"						{configInactivePeriodDays} days, since {configInactivePeriod:yyyy-MM-dd}<br>");
-			//			html.AppendLine(@"					</td>");
-			//			html.AppendLine(@"				</tr>");
-
-			// 'white groups one' groups.
-			if (userValidator.WhiteGroupsOne.Length > 0) {
-				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<th>White groups (one)</th>");
-				html.AppendLine(@"					<td>");
-				foreach (GroupPrincipal group in userValidator.WhiteGroupsOne) {
-					html.AppendLine($"						{group.Name}<br>");
-				}
-				html.AppendLine($"						The action is only performed, if the user is member of one of the 'WhiteGroupsOne' groups");
-				html.AppendLine(@"					</td>");
-				html.AppendLine(@"				</tr>");
-			}
-
-			// 'white groups all' groups.
-			if (userValidator.WhiteGroupsAll.Length > 0) {
-				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<th>White groups (all)</th>");
-				html.AppendLine(@"					<td>");
-				foreach (GroupPrincipal group in userValidator.WhiteGroupsAll) {
-					html.AppendLine($"						{group.Name}<br>");
-				}
-				html.AppendLine($"						The action is only performed, if the user is member of all of the 'WhiteGroupsAll' groups");
-				html.AppendLine(@"					</td>");
-				html.AppendLine(@"				</tr>");
-			}
-
-			// 'black groups one' groups.
-			if (userValidator.BlackGroupsOne.Length > 0) {
-				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<th>Black groups (one)</th>");
-				html.AppendLine(@"					<td>");
-				foreach (GroupPrincipal group in userValidator.BlackGroupsOne) {
-					html.AppendLine($"						{group.Name}<br>");
-				}
-				html.AppendLine($"						The action is only performed, if the user is not member of one of the 'BlackGroupsOne' groups");
-				html.AppendLine(@"					</td>");
-				html.AppendLine(@"				</tr>");
-			}
-
-			// 'black groups all' groups.
-			if (userValidator.BlackGroupsAll.Length > 0) {
-				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<th>Black groups (all)</th>");
-				html.AppendLine(@"					<td>");
-				foreach (GroupPrincipal group in userValidator.BlackGroupsAll) {
-					html.AppendLine($"						{group.Name}<br>");
-				}
-				html.AppendLine($"						The action is only performed, if the user is not member of any of the 'BlackGroupsAll' groups");
-				html.AppendLine(@"					</td>");
-				html.AppendLine(@"				</tr>");
-			}
-
-			// Base DN.
-			if (configBaseDN.Length > 0) {
-				html.AppendLine(@"				<tr>");
-				html.AppendLine(@"					<th>Below DN</th>");
-				html.AppendLine(@"					<td>");
-				html.AppendLine($"						{configBaseDN}<br>");
-				html.AppendLine(@"					</td>");
-				html.AppendLine(@"				</tr>");
-			}
-
-			html.AppendLine(@"			</tbody>");
-			html.AppendLine(@"		</table>");
-
-			// Errors.
-			if (errors.Count > 0) {
-				html.AppendLine(@"		<h2>Errors</h2>");
-				html.AppendLine(@"		<table border=""0"" cellpadding=""5"" cellspacing=""0"">");
-				html.AppendLine(@"			<tbody>");
-				foreach (String error in errors) {
-					html.AppendLine(@"				<tr>");
-					html.AppendLine(@"					<td>");
-					html.AppendLine($"						{error}<br>");
-					html.AppendLine(@"					</td>");
-					html.AppendLine(@"				</tr>");
-				}
-				html.AppendLine(@"			</tbody>");
-				html.AppendLine(@"		</table>");
-			}
-
-			html.AppendLine(@"	</body> ");
-			html.AppendLine(@"</html> ");
-
-			// Return the html.
-			return html.ToString();
-		} // GetHtmlMessage
 		#endregion
 
 	} // ActiveDirectorySynchronizeWithSofd
