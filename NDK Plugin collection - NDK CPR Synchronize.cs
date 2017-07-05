@@ -56,11 +56,25 @@ namespace NDK.PluginCollection {
 				String configSyncAdFilterBaseDN = this.GetLocalValue("SyncADFilterBaseDN", String.Empty);
 
 				Boolean configSyncSofd = this.GetLocalValue("SyncSOFD", false);
-				Boolean configSyncSofdOnlyEnabledUsers = this.GetLocalValue("SyncSOFDOnlyEnabledUsers", true);
+				Boolean configSyncSofdOnlyEnabledUsers = this.GetLocalValue("SyncSOFDOnlyActiveEmployees", true);
 				Boolean configSyncSofdFirstName = this.GetLocalValue("SyncSOFDFirstName", true);
 				Boolean configSyncSofdLastName = this.GetLocalValue("SyncSOFDLastName", true);
 				Boolean configSyncSofdFullName = this.GetLocalValue("SyncSOFDFullName", true);
 				Boolean configSyncSofdDisplayName = this.GetLocalValue("SyncSOFDDisplayName", true);
+				List<String> configSyncSofdFilterWhiteID = this.GetLocalValues("SyncSOFDFilterWhiteID");
+				List<String> configSyncSofdFilterBlackID = this.GetLocalValues("SyncSOFDFilterBlackID");
+				List<String> configSyncSofdFilterWhiteOrganization = this.GetLocalValues("SyncSOFDFilterWhiteOrganization");
+				List<String> configSyncSofdFilterBlackOrganization = this.GetLocalValues("SyncSOFDFilterBlackOrganization");
+				List<String> configSyncSofdFilterWhiteLeader = this.GetLocalValues("SyncSOFDFilterWhiteLeader");
+				List<String> configSyncSofdFilterBlackLeader = this.GetLocalValues("SyncSOFDFilterBlackLeader");
+
+				// Lowercase.
+				for (Int32 index = 0; index < configSyncSofdFilterWhiteID.Count; index++) {
+					configSyncSofdFilterWhiteID[index] = configSyncSofdFilterWhiteID[index].ToLower();
+				}
+				for (Int32 index = 0; index < configSyncSofdFilterBlackID.Count; index++) {
+					configSyncSofdFilterBlackID[index] = configSyncSofdFilterBlackID[index].ToLower();
+				}
 
 				// Only synchronize users according to membership of the SyncWhiteGroupsOne, SyncWhiteGroupsAll, SyncBlackGroupsOne, SyncBlackGroupsAll groups.
 				ActiveDirectoryUserValidator adUserValidator = new ActiveDirectoryUserValidator(this, "SyncADFilter");
@@ -85,7 +99,7 @@ namespace NDK.PluginCollection {
 							(this.GetUserCprNumber(adUser).IsNullOrWhiteSpace() == false) &&																		// User has a CPR number.
 							(adUserValidator.ValidateUser(adUser) == true) &&																						// User membership of white/black groups.
 							((configSyncAdFilterBaseDN.IsNullOrWhiteSpace() == true) || (adUser.DistinguishedName.EndsWith(configSyncAdFilterBaseDN) == true)) &&	// User is below base DN.
-							((adUser.Enabled.Value == true) || (configSyncAdOnlyEnabledUsers == false))) {	// User enabled state.
+							((adUser.Enabled.Value == true) || (configSyncAdOnlyEnabledUsers == false))) {															// User enabled state.
 							List<String> adUpdated = new List<String>();
 							List<String> adUpdatedLong = new List<String>();
 
@@ -146,34 +160,62 @@ namespace NDK.PluginCollection {
 				//-----------------------------------------------------------------------------------------------------------------------------------
 				if (configSyncSofd == true) {
 					foreach (SofdEmployee employee in this.GetAllEmployees()) {
-						if ((employee.SidstAendret.CompareTo(optionSyncLastTime) > 0) &&
-							(employee.CprNummer.IsNullOrWhiteSpace() == false) &&
-							((employee.Aktiv == true) || (configSyncSofdOnlyEnabledUsers == false))) {
+						if ((employee.SidstAendret.CompareTo(optionSyncLastTime) > 0) &&																// Employtt updated after last synchronization.
+							(employee.CprNummer.IsNullOrWhiteSpace() == false) &&																		// Employee has a CPR number.
+							((
+								(configSyncSofdFilterWhiteID.Count == 0) &&																				// Empty identifier white list.
+								(configSyncSofdFilterWhiteOrganization.Count == 0) &&																	// Empty organizatiion white list.
+								(configSyncSofdFilterWhiteLeader.Count == 0)																			// Empty leader white list.
+							) ||
+								(configSyncSofdFilterWhiteID.Contains(employee.MedarbejderHistorikId.ToString()) == true) ||							// Identifier in white list.
+								(configSyncSofdFilterWhiteID.Contains(employee.AdBrugerNavn.GetNotNull().ToLower()) == true) ||							// Identifier in white list.
+								(configSyncSofdFilterWhiteID.Contains(employee.CprNummer.GetNotNull().FormatStringCpr()) == true) ||					// Identifier in white list.
+								(configSyncSofdFilterWhiteID.Contains(employee.Epost.GetNotNull().ToLower()) == true) ||								// Identifier in white list.
+								(configSyncSofdFilterWhiteID.Contains(employee.Uuid.ToString().ToLower()) == true) || 									// Identifier in white list.
+								(configSyncSofdFilterWhiteOrganization.Contains(employee.OrganisationId.ToString()) == true) ||							// Organization identifier in white list.
+								(configSyncSofdFilterWhiteOrganization.Contains(employee.OrganisationKortNavn.GetNotNull()) == true) ||					// Organization short name in white list.
+								(configSyncSofdFilterWhiteOrganization.Contains(employee.OrganisationNavn.GetNotNull()) == true) || 					// Organization name in white list.
+								(configSyncSofdFilterWhiteLeader.Contains(employee.NaermesteLederCprNummer.GetNotNull().FormatStringCpr()) == true) ||	// Leader CPR number in white list.
+								(configSyncSofdFilterWhiteLeader.Contains(employee.NaermesteLederAdBrugerNavn.GetNotNull()) == true) ||					// Leader AD username in white list.
+								(configSyncSofdFilterWhiteLeader.Contains(employee.NaermesteLederNavn.GetNotNull()) == true) 							// Leader name in white list.
+							) &&
+							(configSyncSofdFilterBlackID.Contains(employee.MedarbejderHistorikId.ToString()) == false) &&								// Identifier not in black list.
+							(configSyncSofdFilterBlackID.Contains(employee.AdBrugerNavn.GetNotNull().ToLower()) == false) &&							// Identifier not in black list.
+							(configSyncSofdFilterBlackID.Contains(employee.CprNummer.GetNotNull().FormatStringCpr()) == false) &&						// Identifier not in black list.
+							(configSyncSofdFilterBlackID.Contains(employee.Epost.GetNotNull().ToLower()) == false) &&									// Identifier not in black list.
+							(configSyncSofdFilterBlackID.Contains(employee.Uuid.ToString().ToLower()) == false) &&										// Identifier not in black list.
+							(configSyncSofdFilterBlackOrganization.Contains(employee.OrganisationId.ToString()) == false) &&							// Organization identifier not in black list.
+							(configSyncSofdFilterBlackOrganization.Contains(employee.OrganisationKortNavn.GetNotNull()) == false) &&					// Organization short name not in black list.
+							(configSyncSofdFilterBlackOrganization.Contains(employee.OrganisationNavn.GetNotNull()) == false) &&						// Organization name not in black list.
+							(configSyncSofdFilterBlackID.Contains(employee.NaermesteLederCprNummer.GetNotNull().FormatStringCpr()) == false) &&			// Leader CPR number not in black list.
+							(configSyncSofdFilterBlackID.Contains(employee.NaermesteLederAdBrugerNavn.GetNotNull()) == false) &&						// Leader AD username not in black list.
+							(configSyncSofdFilterBlackID.Contains(employee.NaermesteLederNavn.GetNotNull()) == false) &&								// Leader name not in black list.
+							((employee.Aktiv == true) || (configSyncSofdOnlyEnabledUsers == false))) {													// Employee active state.
 							List<String> employeeUpdated = new List<String>();
 							List<String> employeeUpdatedLong = new List<String>();
 
 							// Query CPR register.
 							CprSearchResult cpr = this.CprSearch(employee.CprNummer);
 							if (cpr != null) {
-								if ((configSyncSofdFirstName == true) && (employee.ForNavn.Equals((cpr.FirstName + " " + cpr.MiddleName).Trim()) == false)) {
+								if ((configSyncSofdFirstName == true) && (employee.ForNavn.GetNotNull().Equals((cpr.FirstName + " " + cpr.MiddleName).Trim()) == false)) {
 									employeeUpdated.Add("First name");
 									employeeUpdatedLong.Add(String.Format("First name ({0} -> {1})", employee.ForNavn, (cpr.FirstName + " " + cpr.MiddleName).Trim()));
 									employee.ForNavn = (cpr.FirstName + " " + cpr.MiddleName).Trim();
 								}
 
-								if ((configSyncSofdLastName == true) && (employee.EfterNavn.Equals(cpr.LastName) == false)) {
+								if ((configSyncSofdLastName == true) && (employee.EfterNavn.GetNotNull().Equals(cpr.LastName) == false)) {
 									employeeUpdated.Add("Last name");
 									employeeUpdatedLong.Add(String.Format("Last name ({0} -> {1})", employee.EfterNavn, cpr.LastName));
 									employee.EfterNavn = cpr.LastName;
 								}
 
-								if ((configSyncSofdFullName == true) && (employee.Navn.Equals(cpr.FullName) == false)) {
+								if ((configSyncSofdFullName == true) && (employee.Navn.GetNotNull().Equals(cpr.FullName) == false)) {
 									employeeUpdated.Add("Full name");
 									employeeUpdatedLong.Add(String.Format("Full name ({0} -> {1})", employee.Navn, cpr.FullName));
 									employee.Navn = cpr.FullName;
 								}
 
-								if ((configSyncSofdDisplayName == true) && (employee.KaldeNavn.Equals(cpr.FullName) == false)) {
+								if ((configSyncSofdDisplayName == true) && (employee.KaldeNavn.GetNotNull().Equals(cpr.FullName) == false)) {
 									employeeUpdated.Add("Display name");
 									employeeUpdatedLong.Add(String.Format("Display name ({0} -> {1})", employee.KaldeNavn, cpr.FullName));
 									employee.KaldeNavn = cpr.FullName;
