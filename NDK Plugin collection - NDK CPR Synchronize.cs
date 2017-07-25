@@ -139,7 +139,7 @@ namespace NDK.PluginCollection {
 										}
 
 										// Save.
-										//adUser.Save();
+										adUser.Save();
 
 										// Log.
 										this.LogDebug("Updated user in AD: {0} - {1}. Fields: {2}", adUser.SamAccountName, adUser.Name, String.Join(", ", adUpdated));
@@ -225,7 +225,7 @@ namespace NDK.PluginCollection {
 								if (employeeUpdated.Count > 0) {
 									if (configFailAlways == false) {
 										// Save.
-										//employee.Save(true);
+										employee.Save(true);
 
 										// Log.
 										this.LogDebug("Updated user in SOFD: {0} - {1}. Fields: {2}", employee.MedarbejderHistorikId, employee.Navn, String.Join(", ", employeeUpdated));
